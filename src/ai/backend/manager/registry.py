@@ -372,7 +372,7 @@ class AgentRegistry:
         evd.consume(AgentStartedEvent, self, handle_agent_lifecycle)
         evd.consume(AgentTerminatedEvent, self, handle_agent_lifecycle)
         evd.consume(AgentHeartbeatEvent, self, handle_agent_heartbeat)
-        evd.consume(AgentImagesRemoveEvent, self, handle_agent_purge_images)
+        evd.consume(AgentImagesRemoveEvent, self, handle_agent_images_remove)
         evd.consume(RouteCreatedEvent, self, handle_route_creation)
 
         evd.consume(VFolderDeletionSuccessEvent, self, handle_vfolder_deletion_success)
@@ -3169,7 +3169,9 @@ class AgentRegistry:
             (agent_id, sgroup, available_slots),
         )
 
-    async def handle_purge_images(self, agent_id: AgentId, image_canonicals: list[str]) -> None:
+    async def handle_agent_images_remove(
+        self, agent_id: AgentId, image_canonicals: list[str]
+    ) -> None:
         async def _pipe_builder(r: Redis):
             pipe = r.pipeline()
             for image in image_canonicals:
@@ -4219,12 +4221,12 @@ async def handle_agent_heartbeat(
     await context.handle_heartbeat(source, event.agent_info)
 
 
-async def handle_agent_purge_images(
+async def handle_agent_images_remove(
     context: AgentRegistry,
     source: AgentId,
     event: AgentImagesRemoveEvent,
 ) -> None:
-    await context.handle_purge_images(source, event.image_canonicals)
+    await context.handle_agent_images_remove(source, event.image_canonicals)
 
 
 async def handle_route_creation(
