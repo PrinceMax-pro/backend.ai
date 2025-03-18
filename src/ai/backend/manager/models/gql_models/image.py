@@ -722,7 +722,7 @@ class ForgetImageById(graphene.Mutation):
             if not image_row:
                 raise ObjectNotFound("image")
             if client_role != UserRole.SUPERADMIN:
-                if not image_row.is_customized_by(ctx.user["uuid"]):
+                if not image_row.is_owned_by(ctx.user["uuid"]):
                     return ForgetImageById(ok=False, msg="Forbidden")
             await image_row.mark_as_deleted(session)
             return ForgetImageById(ok=True, msg="", image=ImageNode.from_row(ctx, image_row))
@@ -767,7 +767,7 @@ class ForgetImage(graphene.Mutation):
                 ],
             )
             if client_role != UserRole.SUPERADMIN:
-                if not image_row.is_customized_by(ctx.user["uuid"]):
+                if not image_row.is_owned_by(ctx.user["uuid"]):
                     return ForgetImage(ok=False, msg="Forbidden")
             await image_row.mark_as_deleted(session)
             return ForgetImage(ok=True, msg="", image=ImageNode.from_row(ctx, image_row))
@@ -804,7 +804,7 @@ class PurgeImageById(graphene.Mutation):
             if not image_row:
                 raise ObjectNotFound("image")
             if client_role != UserRole.SUPERADMIN:
-                if not image_row.is_customized_by(ctx.user["uuid"]):
+                if not image_row.is_owned_by(ctx.user["uuid"]):
                     raise GenericForbidden("Image is not owned by your account.")
             await session.delete(image_row)
             return PurgeImageById(image=ImageNode.from_row(ctx, image_row))
@@ -845,7 +845,7 @@ class UntagImageFromRegistry(graphene.Mutation):
             if not image_row:
                 raise ImageNotFound
             if client_role != UserRole.SUPERADMIN:
-                if not image_row.is_customized_by(ctx.user["uuid"]):
+                if not image_row.is_owned_by(ctx.user["uuid"]):
                     return UntagImageFromRegistry(ok=False, msg="Forbidden")
 
             query = sa.select(ContainerRegistryRow).where(
