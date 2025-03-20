@@ -42,6 +42,7 @@ from ai.backend.logging import BraceStyleAdapter
 from ai.backend.manager.models.container_registry import ContainerRegistryRow
 from ai.backend.manager.services.resource.actions.check_presets import CheckResourcePresetsAction
 from ai.backend.manager.services.resource.actions.list_presets import ListResourcePresetsAction
+from ai.backend.manager.services.resource.actions.recalculate_usage import RecalculateUsageAction
 
 from ..models import (
     LIVE_STATUS,
@@ -157,7 +158,8 @@ async def recalculate_usage(request: web.Request) -> web.Response:
     """
     log.info("RECALCULATE_USAGE ()")
     root_ctx: RootContext = request.app["_root.context"]
-    await root_ctx.registry.recalc_resource_usage()
+    await root_ctx.processors.resource.check_presets.wait_for_complete(RecalculateUsageAction())
+
     return web.json_response({}, status=200)
 
 
