@@ -30,7 +30,6 @@ import trafaret as t
 import yarl
 from aiohttp import web
 from async_timeout import timeout as _timeout
-from dateutil.relativedelta import relativedelta
 from dateutil.tz import tzutc
 from redis.asyncio import Redis
 from redis.asyncio.client import Pipeline as RedisPipeline
@@ -43,6 +42,7 @@ from ai.backend.manager.models.container_registry import ContainerRegistryRow
 from ai.backend.manager.services.resource.actions.check_presets import CheckResourcePresetsAction
 from ai.backend.manager.services.resource.actions.list_presets import ListResourcePresetsAction
 from ai.backend.manager.services.resource.actions.recalculate_usage import RecalculateUsageAction
+from ai.backend.manager.services.resource.actions.usage_per_month import UsagePerMonthAction
 
 from ..models import (
     LIVE_STATUS,
@@ -382,15 +382,14 @@ async def usage_per_month(request: web.Request, params: Any) -> web.Response:
     """
     log.info("USAGE_PER_MONTH (g:[{}], month:{})", ",".join(params["group_ids"]), params["month"])
     root_ctx: RootContext = request.app["_root.context"]
-    local_tz = root_ctx.shared_config["system"]["timezone"]
-    try:
-        start_date = datetime.strptime(params["month"], "%Y%m").replace(tzinfo=local_tz)
-        end_date = start_date + relativedelta(months=+1)
-    except ValueError:
-        raise InvalidAPIParameters(extra_msg="Invalid date values")
-    resp = await get_container_stats_for_period(request, start_date, end_date, params["group_ids"])
-    log.debug("container list are retrieved for month {0}", params["month"])
-    return web.json_response(resp, status=200)
+
+    result = await root_ctx.processors.resource.check_presets.wait_for_complete(
+        UsagePerMonthAction(
+            group_ids=params["group_ids"],
+            month=params["month"],
+        )
+    )
+    return web.json_response(result, status=200)
 
 
 @server_status_required(READ_ALLOWED)
