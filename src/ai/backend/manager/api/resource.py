@@ -16,11 +16,9 @@ from typing import (
     Any,
     Iterable,
     Mapping,
-    MutableMapping,
     Optional,
     Sequence,
     Tuple,
-    cast,
 )
 from uuid import UUID
 
@@ -36,32 +34,22 @@ from dateutil.relativedelta import relativedelta
 from dateutil.tz import tzutc
 from redis.asyncio import Redis
 from redis.asyncio.client import Pipeline as RedisPipeline
-from sqlalchemy.ext.asyncio import AsyncSession as SASession
 
 from ai.backend.common import redis_helper
 from ai.backend.common import validators as tx
-from ai.backend.common.types import DefaultForUnspecified, ResourceSlot
 from ai.backend.common.utils import nmget
 from ai.backend.logging import BraceStyleAdapter
 from ai.backend.manager.models.container_registry import ContainerRegistryRow
+from ai.backend.manager.services.resource.actions.check_presets import CheckResourcePresetsAction
 from ai.backend.manager.services.resource.actions.list_presets import ListResourcePresetsAction
 
 from ..models import (
-    AGENT_RESOURCE_OCCUPYING_KERNEL_STATUSES,
     LIVE_STATUS,
     RESOURCE_USAGE_KERNEL_STATUSES,
-    AgentStatus,
-    KernelRow,
-    SessionRow,
-    agents,
-    association_groups_users,
-    domains,
     groups,
     kernels,
-    query_allowed_sgroups,
     users,
 )
-from ..models.resource_preset import ResourcePresetRow
 from ..models.resource_usage import (
     ProjectResourceUsage,
     fetch_resource_usage,
@@ -124,188 +112,37 @@ async def check_presets(request: web.Request, params: Any) -> web.Response:
         # assert scaling_group is not None, 'scaling_group parameter is missing.'
     except (json.decoder.JSONDecodeError, AssertionError) as e:
         raise InvalidAPIParameters(extra_msg=str(e.args[0]))
-    known_slot_types = await root_ctx.shared_config.get_resource_slots()
-    resp: MutableMapping[str, Any] = {
-        "keypair_limits": None,
-        "keypair_using": None,
-        "keypair_remaining": None,
-        "scaling_group_remaining": None,
-        "scaling_groups": None,
-        "presets": [],
-    }
+
     log.info(
         "CHECK_PRESETS (ak:{}, g:{}, sg:{})",
-        request["keypair"]["access_key"],
+        access_key,
         params["group"],
         params["scaling_group"],
     )
 
-    async with root_ctx.db.begin_readonly() as conn:
-        # Check keypair resource limit.
-        keypair_limits = ResourceSlot.from_policy(resource_policy, known_slot_types)
-        keypair_occupied = await root_ctx.registry.get_keypair_occupancy(
-            access_key, db_sess=SASession(conn)
+    result = await root_ctx.processors.resource.check_presets.wait_for_complete(
+        CheckResourcePresetsAction(
+            access_key=access_key,
+            resource_policy=resource_policy,
+            domain_name=domain_name,
+            user_id=request["user"]["uuid"],
+            group=params["group"],
+            scaling_group=params["scaling_group"],
         )
-        keypair_remaining = keypair_limits - keypair_occupied
+    )
 
-        # Check group resource limit and get group_id.
-        j = sa.join(
-            groups,
-            association_groups_users,
-            association_groups_users.c.group_id == groups.c.id,
-        )
-        query = (
-            sa.select([groups.c.id, groups.c.total_resource_slots])
-            .select_from(j)
-            .where(
-                (association_groups_users.c.user_id == request["user"]["uuid"])
-                & (groups.c.name == params["group"])
-                & (groups.c.domain_name == domain_name),
-            )
-        )
-        result = await conn.execute(query)
-        row = result.first()
-        if row is None:
-            raise InvalidAPIParameters(f"Unknown project (name: {params['group']})")
-        group_id = row["id"]
-        group_resource_slots = row["total_resource_slots"]
-        if group_id is None:
-            raise InvalidAPIParameters(f"Unknown project (name: {params['group']})")
-        group_resource_policy = {
-            "total_resource_slots": group_resource_slots,
-            "default_for_unspecified": DefaultForUnspecified.UNLIMITED,
-        }
-        group_limits = ResourceSlot.from_policy(group_resource_policy, known_slot_types)
-        group_occupied = await root_ctx.registry.get_group_occupancy(
-            group_id, db_sess=SASession(conn)
-        )
-        group_remaining = group_limits - group_occupied
+    resp = {
+        "presets": result.presets,
+        "keypair_limits": result.keypair_limits,
+        "keypair_using": result.keypair_using,
+        "keypair_remaining": result.keypair_remaining,
+        "group_limits": result.group_limits,
+        "group_using": result.group_using,
+        "group_remaining": result.group_remaining,
+        "scaling_group_remaining": result.scaling_group_remaining,
+        "scaling_groups": result.scaling_groups,
+    }
 
-        # Check domain resource limit.
-        query = sa.select([domains.c.total_resource_slots]).where(domains.c.name == domain_name)
-        domain_resource_slots = await conn.scalar(query)
-        domain_resource_policy = {
-            "total_resource_slots": domain_resource_slots,
-            "default_for_unspecified": DefaultForUnspecified.UNLIMITED,
-        }
-        domain_limits = ResourceSlot.from_policy(domain_resource_policy, known_slot_types)
-        domain_occupied = await root_ctx.registry.get_domain_occupancy(
-            domain_name, db_sess=SASession(conn)
-        )
-        domain_remaining = domain_limits - domain_occupied
-
-        # Take minimum remaining resources. There's no need to merge limits and occupied.
-        # To keep legacy, we just merge all remaining slots into `keypair_remainig`.
-        for slot in known_slot_types:
-            keypair_remaining[slot] = min(
-                keypair_remaining[slot],
-                group_remaining[slot],
-                domain_remaining[slot],
-            )
-
-        # Prepare per scaling group resource.
-        sgroups = await query_allowed_sgroups(conn, domain_name, group_id, access_key)
-        sgroup_names = [sg.name for sg in sgroups]
-        if params["scaling_group"] is not None:
-            if params["scaling_group"] not in sgroup_names:
-                raise InvalidAPIParameters("Unknown scaling group")
-            sgroup_names = [params["scaling_group"]]
-        per_sgroup = {
-            sgname: {
-                "using": ResourceSlot({k: Decimal(0) for k in known_slot_types.keys()}),
-                "remaining": ResourceSlot({k: Decimal(0) for k in known_slot_types.keys()}),
-            }
-            for sgname in sgroup_names
-        }
-
-        # Per scaling group resource using from resource occupying kernels.
-        j = sa.join(KernelRow, SessionRow, KernelRow.session_id == SessionRow.id)
-        query = (
-            sa.select([KernelRow.occupied_slots, SessionRow.scaling_group_name])
-            .select_from(j)
-            .where(
-                (KernelRow.user_uuid == request["user"]["uuid"])
-                & (KernelRow.status.in_(AGENT_RESOURCE_OCCUPYING_KERNEL_STATUSES))
-                & (SessionRow.scaling_group_name.in_(sgroup_names)),
-            )
-        )
-        async for row in await conn.stream(query):
-            per_sgroup[row["scaling_group_name"]]["using"] += row["occupied_slots"]
-
-        # Per scaling group resource remaining from agents stats.
-        sgroup_remaining = ResourceSlot({k: Decimal(0) for k in known_slot_types.keys()})
-        query = (
-            sa.select([agents.c.available_slots, agents.c.occupied_slots, agents.c.scaling_group])
-            .select_from(agents)
-            .where(
-                (agents.c.status == AgentStatus.ALIVE) & (agents.c.scaling_group.in_(sgroup_names)),
-            )
-        )
-        agent_slots = []
-        async for row in await conn.stream(query):
-            remaining = row["available_slots"] - row["occupied_slots"]
-            remaining += ResourceSlot({k: Decimal(0) for k in known_slot_types.keys()})
-            sgroup_remaining += remaining
-            agent_slots.append(remaining)
-            per_sgroup[row["scaling_group"]]["remaining"] += remaining
-
-        # Take maximum allocatable resources per sgroup.
-        for sgname, sgfields in per_sgroup.items():
-            for rtype, slots in sgfields.items():
-                if rtype == "remaining":
-                    for slot in known_slot_types.keys():
-                        if slot in slots:
-                            slots[slot] = min(keypair_remaining[slot], slots[slot])
-                per_sgroup[sgname][rtype] = slots.to_json()  # type: ignore  # it's serialization
-        for slot in known_slot_types.keys():
-            sgroup_remaining[slot] = min(keypair_remaining[slot], sgroup_remaining[slot])
-
-        # Fetch all resource presets in the current scaling group.
-        resource_preset_query = sa.select(ResourcePresetRow)
-        query_condition = ResourcePresetRow.scaling_group_name.is_(sa.null())
-        if params["scaling_group"] is not None:
-            query_condition = sa.or_(
-                query_condition,
-                ResourcePresetRow.scaling_group_name == params["scaling_group"],
-            )
-        resource_preset_query = resource_preset_query.where(query_condition)
-        async for row in await SASession(conn).stream_scalars(resource_preset_query):
-            # Check if there are any agent that can allocate each preset.
-            row = cast(ResourcePresetRow, row)
-            allocatable = False
-            preset_slots = row.resource_slots.normalize_slots(ignore_unknown=True)
-            for agent_slot in agent_slots:
-                if agent_slot >= preset_slots and keypair_remaining >= preset_slots:
-                    allocatable = True
-                    break
-            resp["presets"].append({
-                "id": str(row.id),
-                "name": row.name,
-                "resource_slots": preset_slots.to_json(),
-                "shared_memory": (
-                    str(row.shared_memory) if row.shared_memory is not None else None
-                ),
-                "allocatable": allocatable,
-            })
-
-        # Return group resource status as NaN if not allowed.
-        group_resource_visibility = await root_ctx.shared_config.get_raw(
-            "config/api/resources/group_resource_visibility"
-        )
-        group_resource_visibility = t.ToBool().check(group_resource_visibility)
-        if not group_resource_visibility:
-            group_limits = ResourceSlot({k: Decimal("NaN") for k in known_slot_types.keys()})
-            group_occupied = ResourceSlot({k: Decimal("NaN") for k in known_slot_types.keys()})
-            group_remaining = ResourceSlot({k: Decimal("NaN") for k in known_slot_types.keys()})
-
-        resp["keypair_limits"] = keypair_limits.to_json()
-        resp["keypair_using"] = keypair_occupied.to_json()
-        resp["keypair_remaining"] = keypair_remaining.to_json()
-        resp["group_limits"] = group_limits.to_json()
-        resp["group_using"] = group_occupied.to_json()
-        resp["group_remaining"] = group_remaining.to_json()
-        resp["scaling_group_remaining"] = sgroup_remaining.to_json()
-        resp["scaling_groups"] = per_sgroup
     return web.json_response(resp, status=200)
 
 
