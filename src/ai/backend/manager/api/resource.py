@@ -44,6 +44,7 @@ from ai.backend.common.types import DefaultForUnspecified, ResourceSlot
 from ai.backend.common.utils import nmget
 from ai.backend.logging import BraceStyleAdapter
 from ai.backend.manager.models.container_registry import ContainerRegistryRow
+from ai.backend.manager.services.resource.actions.list_presets import ListResourcePresetsAction
 
 from ..models import (
     AGENT_RESOURCE_OCCUPYING_KERNEL_STATUSES,
@@ -88,27 +89,15 @@ async def list_presets(request: web.Request) -> web.Response:
     """
     log.info("LIST_PRESETS (ak:{})", request["keypair"]["access_key"])
     root_ctx: RootContext = request.app["_root.context"]
-    await root_ctx.shared_config.get_resource_slots()
-    async with root_ctx.db.begin_readonly_session() as db_session:
-        query = sa.select(ResourcePresetRow)
-        query_condition = ResourcePresetRow.scaling_group_name.is_(sa.null())
-        scaling_group_name = request.query.get("scaling_group")
-        if scaling_group_name is not None:
-            query_condition = sa.or_(
-                query_condition, ResourcePresetRow.scaling_group_name == scaling_group_name
-            )
-        query = query.where(query_condition)
-        resp: MutableMapping[str, Any] = {"presets": []}
-        async for row in await db_session.stream_scalars(query):
-            row = cast(ResourcePresetRow, row)
-            preset_slots = row.resource_slots.normalize_slots(ignore_unknown=True)
-            resp["presets"].append({
-                "id": str(row.id),
-                "name": row.name,
-                "shared_memory": str(row.shared_memory) if row.shared_memory else None,
-                "resource_slots": preset_slots.to_json(),
-            })
-        return web.json_response(resp, status=200)
+
+    scaling_group_name = request.query.get("scaling_group")
+    result = await root_ctx.processors.resource.list_presets.wait_for_complete(
+        ListResourcePresetsAction(
+            access_key=request["keypair"]["access_key"],
+            scaling_group=scaling_group_name,
+        )
+    )
+    return web.json_response({"presets": result}, status=200)
 
 
 @server_status_required(READ_ALLOWED)
