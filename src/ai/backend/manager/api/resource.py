@@ -16,23 +16,27 @@ from typing import (
     Tuple,
 )
 
-import aiohttp
 import aiohttp_cors
 import trafaret as t
 import yarl
 from aiohttp import web
-from async_timeout import timeout as _timeout
 
 from ai.backend.common import validators as tx
 from ai.backend.logging import BraceStyleAdapter
 from ai.backend.manager.models.container_registry import ContainerRegistryRow
 from ai.backend.manager.services.resource.actions.admin_month_stats import AdminMonthStatsAction
 from ai.backend.manager.services.resource.actions.check_presets import CheckResourcePresetsAction
+from ai.backend.manager.services.resource.actions.get_watcher_status import GetWatcherStatusAction
 from ai.backend.manager.services.resource.actions.list_presets import ListResourcePresetsAction
 from ai.backend.manager.services.resource.actions.recalculate_usage import RecalculateUsageAction
 from ai.backend.manager.services.resource.actions.usage_per_month import UsagePerMonthAction
 from ai.backend.manager.services.resource.actions.usage_per_period import UsagePerPeriodAction
 from ai.backend.manager.services.resource.actions.user_month_stats import UserMonthStatsAction
+from ai.backend.manager.services.resource.actions.watcher_agent_restart import (
+    WatcherAgentRestartAction,
+)
+from ai.backend.manager.services.resource.actions.watcher_agent_start import WatcherAgentStartAction
+from ai.backend.manager.services.resource.actions.watcher_agent_stop import WatcherAgentStopAction
 
 from .auth import auth_required, superadmin_required
 from .exceptions import InvalidAPIParameters
@@ -135,7 +139,7 @@ async def recalculate_usage(request: web.Request) -> web.Response:
     """
     log.info("RECALCULATE_USAGE ()")
     root_ctx: RootContext = request.app["_root.context"]
-    await root_ctx.processors.resource.check_presets.wait_for_complete(RecalculateUsageAction())
+    await root_ctx.processors.resource.recalculate_usage.wait_for_complete(RecalculateUsageAction())
 
     return web.json_response({}, status=200)
 
@@ -233,13 +237,15 @@ async def admin_month_stats(request: web.Request) -> web.Response:
     log.info("ADMIN_LAST_MONTH_STATS ()")
     root_ctx: RootContext = request.app["_root.context"]
 
-    result = await root_ctx.processors.resource.user_month_stats.wait_for_complete(
+    result = await root_ctx.processors.resource.admin_month_stats.wait_for_complete(
         AdminMonthStatsAction()
     )
 
     return web.json_response(result, status=200)
 
 
+# TODO: get_watcher_info는 서비스쪽 메서드랑 겹침.
+# vfolder 쪽에서 쓰고 있어서 냅둠.
 async def get_watcher_info(request: web.Request, agent_id: str) -> dict:
     """
     Get watcher information.
@@ -273,18 +279,18 @@ async def get_watcher_info(request: web.Request, agent_id: str) -> dict:
 )
 async def get_watcher_status(request: web.Request, params: Any) -> web.Response:
     log.info("GET_WATCHER_STATUS (ag:{})", params["agent_id"])
-    watcher_info = await get_watcher_info(request, params["agent_id"])
-    connector = aiohttp.TCPConnector()
-    async with aiohttp.ClientSession(connector=connector) as sess:
-        with _timeout(5.0):
-            headers = {"X-BackendAI-Watcher-Token": watcher_info["token"]}
-            async with sess.get(watcher_info["addr"], headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return web.json_response(data, status=resp.status)
-                else:
-                    data = await resp.text()
-                    return web.Response(text=data, status=resp.status)
+    root_ctx: RootContext = request.app["_root.context"]
+
+    result = await root_ctx.processors.resource.get_watcher_status.wait_for_complete(
+        GetWatcherStatusAction(agent_id=params["agent_id"])
+    )
+
+    if result.resp.status == 200:
+        data = await result.resp.json()
+        return web.json_response(data, status=result.resp.status)
+    else:
+        data = await result.resp.text()
+        return web.Response(text=data, status=result.resp.status)
 
 
 @server_status_required(READ_ALLOWED)
@@ -296,19 +302,18 @@ async def get_watcher_status(request: web.Request, params: Any) -> web.Response:
 )
 async def watcher_agent_start(request: web.Request, params: Any) -> web.Response:
     log.info("WATCHER_AGENT_START (ag:{})", params["agent_id"])
-    watcher_info = await get_watcher_info(request, params["agent_id"])
-    connector = aiohttp.TCPConnector()
-    async with aiohttp.ClientSession(connector=connector) as sess:
-        with _timeout(20.0):
-            watcher_url = watcher_info["addr"] / "agent/start"
-            headers = {"X-BackendAI-Watcher-Token": watcher_info["token"]}
-            async with sess.post(watcher_url, headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return web.json_response(data, status=resp.status)
-                else:
-                    data = await resp.text()
-                    return web.Response(text=data, status=resp.status)
+    root_ctx: RootContext = request.app["_root.context"]
+
+    result = await root_ctx.processors.resource.watcher_agent_start.wait_for_complete(
+        WatcherAgentStartAction(agent_id=params["agent_id"])
+    )
+
+    if result.resp.status == 200:
+        data = await result.resp.json()
+        return web.json_response(data, status=result.resp.status)
+    else:
+        data = await result.resp.text()
+        return web.Response(text=data, status=result.resp.status)
 
 
 @server_status_required(READ_ALLOWED)
@@ -320,19 +325,18 @@ async def watcher_agent_start(request: web.Request, params: Any) -> web.Response
 )
 async def watcher_agent_stop(request: web.Request, params: Any) -> web.Response:
     log.info("WATCHER_AGENT_STOP (ag:{})", params["agent_id"])
-    watcher_info = await get_watcher_info(request, params["agent_id"])
-    connector = aiohttp.TCPConnector()
-    async with aiohttp.ClientSession(connector=connector) as sess:
-        with _timeout(20.0):
-            watcher_url = watcher_info["addr"] / "agent/stop"
-            headers = {"X-BackendAI-Watcher-Token": watcher_info["token"]}
-            async with sess.post(watcher_url, headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return web.json_response(data, status=resp.status)
-                else:
-                    data = await resp.text()
-                    return web.Response(text=data, status=resp.status)
+    root_ctx: RootContext = request.app["_root.context"]
+
+    result = await root_ctx.processors.resource.watcher_agent_stop.wait_for_complete(
+        WatcherAgentStopAction(agent_id=params["agent_id"])
+    )
+
+    if result.resp.status == 200:
+        data = await result.resp.json()
+        return web.json_response(data, status=result.resp.status)
+    else:
+        data = await result.resp.text()
+        return web.Response(text=data, status=result.resp.status)
 
 
 @server_status_required(READ_ALLOWED)
@@ -344,19 +348,20 @@ async def watcher_agent_stop(request: web.Request, params: Any) -> web.Response:
 )
 async def watcher_agent_restart(request: web.Request, params: Any) -> web.Response:
     log.info("WATCHER_AGENT_RESTART (ag:{})", params["agent_id"])
-    watcher_info = await get_watcher_info(request, params["agent_id"])
-    connector = aiohttp.TCPConnector()
-    async with aiohttp.ClientSession(connector=connector) as sess:
-        with _timeout(20.0):
-            watcher_url = watcher_info["addr"] / "agent/restart"
-            headers = {"X-BackendAI-Watcher-Token": watcher_info["token"]}
-            async with sess.post(watcher_url, headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return web.json_response(data, status=resp.status)
-                else:
-                    data = await resp.text()
-                    return web.Response(text=data, status=resp.status)
+    root_ctx: RootContext = request.app["_root.context"]
+
+    result = await root_ctx.processors.resource.watcher_agent_restart.wait_for_complete(
+        WatcherAgentRestartAction(
+            agent_id=params["agent_id"],
+        )
+    )
+
+    if result.resp.status == 200:
+        data = await result.resp.json()
+        return web.json_response(data, status=result.resp.status)
+    else:
+        data = await result.resp.text()
+        return web.Response(text=data, status=result.resp.status)
 
 
 @superadmin_required
