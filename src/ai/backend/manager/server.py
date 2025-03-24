@@ -74,8 +74,11 @@ from ai.backend.manager.service.container_registry.harbor import (
     PerProjectContainerRegistryQuotaClientPool,
     PerProjectContainerRegistryQuotaService,
 )
+from ai.backend.manager.services.agent.service import AgentService
+from ai.backend.manager.services.container_registry.service import ContainerRegistryService
 from ai.backend.manager.services.processors import Processors
 from ai.backend.manager.services.resource.service import ResourceService
+from ai.backend.manager.services.resource_preset.service import ResourcePresetService
 
 from . import __version__
 from .agent_cache import AgentRPCCache
@@ -431,6 +434,12 @@ async def database_ctx(root_ctx: RootContext) -> AsyncIterator[None]:
 
 @actxmgr
 async def processors_ctx(root_ctx: RootContext) -> AsyncIterator[None]:
+    agent_service = AgentService(
+        db=root_ctx.db,
+        agent_registry=root_ctx.registry,
+        shared_config=root_ctx.shared_config,
+    )
+
     resource_service = ResourceService(
         db=root_ctx.db,
         agent_registry=root_ctx.registry,
@@ -438,8 +447,21 @@ async def processors_ctx(root_ctx: RootContext) -> AsyncIterator[None]:
         shared_config=root_ctx.shared_config,
     )
 
+    resource_preset_service = ResourcePresetService(
+        db=root_ctx.db,
+        agent_registry=root_ctx.registry,
+        shared_config=root_ctx.shared_config,
+    )
+
+    container_registry_service = ContainerRegistryService(
+        db=root_ctx.db,
+    )
+
     root_ctx.processors = Processors(
+        agent_service=agent_service,
+        resource_preset_service=resource_preset_service,
         resource_service=resource_service,
+        container_registry_service=container_registry_service,
     )
     yield
 

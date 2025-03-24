@@ -5,14 +5,14 @@ from ai.backend.manager.actions.action import BaseAction, BaseBatchAction
 
 
 @dataclass
-class ResourceAction(BaseAction):
+class AgentAction(BaseAction):
     @override
     def entity_type(self):
-        return "resource"
+        return "agent"
 
 
 @dataclass
-class ResourceBatchAction(BaseBatchAction):
+class AgentBatchAction(BaseBatchAction):
     @override
     def entity_type(self):
-        return "resource"
+        return "agent"

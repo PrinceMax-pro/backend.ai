@@ -23,22 +23,26 @@ from aiohttp import web
 
 from ai.backend.common import validators as tx
 from ai.backend.logging import BraceStyleAdapter
-from ai.backend.manager.services.resource.actions.admin_month_stats import AdminMonthStatsAction
-from ai.backend.manager.services.resource.actions.check_presets import CheckResourcePresetsAction
-from ai.backend.manager.services.resource.actions.get_container_registries import (
+from ai.backend.manager.services.agent.actions.get_watcher_status import GetWatcherStatusAction
+from ai.backend.manager.services.agent.actions.watcher_agent_restart import (
+    WatcherAgentRestartAction,
+)
+from ai.backend.manager.services.agent.actions.watcher_agent_start import WatcherAgentStartAction
+from ai.backend.manager.services.agent.actions.watcher_agent_stop import WatcherAgentStopAction
+from ai.backend.manager.services.container_registry.actions.get_container_registries import (
     GetContainerRegistriesAction,
 )
-from ai.backend.manager.services.resource.actions.get_watcher_status import GetWatcherStatusAction
-from ai.backend.manager.services.resource.actions.list_presets import ListResourcePresetsAction
+from ai.backend.manager.services.resource.actions.admin_month_stats import AdminMonthStatsAction
 from ai.backend.manager.services.resource.actions.recalculate_usage import RecalculateUsageAction
 from ai.backend.manager.services.resource.actions.usage_per_month import UsagePerMonthAction
 from ai.backend.manager.services.resource.actions.usage_per_period import UsagePerPeriodAction
 from ai.backend.manager.services.resource.actions.user_month_stats import UserMonthStatsAction
-from ai.backend.manager.services.resource.actions.watcher_agent_restart import (
-    WatcherAgentRestartAction,
+from ai.backend.manager.services.resource_preset.actions.check_presets import (
+    CheckResourcePresetsAction,
 )
-from ai.backend.manager.services.resource.actions.watcher_agent_start import WatcherAgentStartAction
-from ai.backend.manager.services.resource.actions.watcher_agent_stop import WatcherAgentStopAction
+from ai.backend.manager.services.resource_preset.actions.list_presets import (
+    ListResourcePresetsAction,
+)
 
 from .auth import auth_required, superadmin_required
 from .exceptions import InvalidAPIParameters
@@ -63,7 +67,7 @@ async def list_presets(request: web.Request) -> web.Response:
     root_ctx: RootContext = request.app["_root.context"]
 
     scaling_group_name = request.query.get("scaling_group")
-    result = await root_ctx.processors.resource.list_presets.wait_for_complete(
+    result = await root_ctx.processors.resource_preset.list_presets.wait_for_complete(
         ListResourcePresetsAction(
             access_key=request["keypair"]["access_key"],
             scaling_group=scaling_group_name,
@@ -104,7 +108,7 @@ async def check_presets(request: web.Request, params: Any) -> web.Response:
         params["scaling_group"],
     )
 
-    result = await root_ctx.processors.resource.check_presets.wait_for_complete(
+    result = await root_ctx.processors.resource_preset.check_presets.wait_for_complete(
         CheckResourcePresetsAction(
             access_key=access_key,
             resource_policy=resource_policy,
@@ -283,7 +287,7 @@ async def get_watcher_status(request: web.Request, params: Any) -> web.Response:
     log.info("GET_WATCHER_STATUS (ag:{})", params["agent_id"])
     root_ctx: RootContext = request.app["_root.context"]
 
-    result = await root_ctx.processors.resource.get_watcher_status.wait_for_complete(
+    result = await root_ctx.processors.agent.get_watcher_status.wait_for_complete(
         GetWatcherStatusAction(agent_id=params["agent_id"])
     )
 
@@ -306,7 +310,7 @@ async def watcher_agent_start(request: web.Request, params: Any) -> web.Response
     log.info("WATCHER_AGENT_START (ag:{})", params["agent_id"])
     root_ctx: RootContext = request.app["_root.context"]
 
-    result = await root_ctx.processors.resource.watcher_agent_start.wait_for_complete(
+    result = await root_ctx.processors.agent.watcher_agent_start.wait_for_complete(
         WatcherAgentStartAction(agent_id=params["agent_id"])
     )
 
@@ -329,7 +333,7 @@ async def watcher_agent_stop(request: web.Request, params: Any) -> web.Response:
     log.info("WATCHER_AGENT_STOP (ag:{})", params["agent_id"])
     root_ctx: RootContext = request.app["_root.context"]
 
-    result = await root_ctx.processors.resource.watcher_agent_stop.wait_for_complete(
+    result = await root_ctx.processors.agent.watcher_agent_stop.wait_for_complete(
         WatcherAgentStopAction(agent_id=params["agent_id"])
     )
 
@@ -352,7 +356,7 @@ async def watcher_agent_restart(request: web.Request, params: Any) -> web.Respon
     log.info("WATCHER_AGENT_RESTART (ag:{})", params["agent_id"])
     root_ctx: RootContext = request.app["_root.context"]
 
-    result = await root_ctx.processors.resource.watcher_agent_restart.wait_for_complete(
+    result = await root_ctx.processors.agent.watcher_agent_restart.wait_for_complete(
         WatcherAgentRestartAction(
             agent_id=params["agent_id"],
         )
@@ -373,8 +377,10 @@ async def get_container_registries(request: web.Request) -> web.Response:
     """
     root_ctx: RootContext = request.app["_root.context"]
 
-    result = await root_ctx.processors.resource.get_container_registries.wait_for_complete(
-        GetContainerRegistriesAction()
+    result = (
+        await root_ctx.processors.container_registry.get_container_registries.wait_for_complete(
+            GetContainerRegistriesAction()
+        )
     )
 
     return web.json_response(result, status=200)
