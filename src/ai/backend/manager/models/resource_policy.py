@@ -13,15 +13,6 @@ from sqlalchemy.orm import relationship, selectinload
 from ai.backend.common.types import DefaultForUnspecified
 from ai.backend.logging import BraceStyleAdapter
 from ai.backend.manager.models.utils import execute_with_retry
-from ai.backend.manager.services.keypair_resource_policies.actions.create_keypair_resource_policy import (
-    CreateKeyPairResourcePolicyAction,
-)
-from ai.backend.manager.services.keypair_resource_policies.actions.delete_keypair_resource_policy import (
-    DeleteKeyPairResourcePolicyAction,
-)
-from ai.backend.manager.services.keypair_resource_policies.actions.modify_keypair_resource_policy import (
-    ModifyKeyPairResourcePolicyAction,
-)
 
 from .base import (
     Base,
@@ -371,17 +362,18 @@ class CreateKeyPairResourcePolicy(graphene.Mutation):
         name: str,
         props: CreateKeyPairResourcePolicyInput,
     ) -> CreateKeyPairResourcePolicy:
+        from ai.backend.manager.services.keypair_resource_policies.actions.create_keypair_resource_policy import (
+            CreateKeyPairResourcePolicyAction,
+        )
+
         graph_ctx: GraphQueryContext = info.context
-        result = await graph_ctx.processors.keypair_resource_policy_service.create_keypair_resource_policy.wait_for_complete(
+        await graph_ctx.processors.keypair_resource_policy_service.create_keypair_resource_policy.wait_for_complete(
             CreateKeyPairResourcePolicyAction(name, props)
         )
 
         return CreateKeyPairResourcePolicy(
             ok=True,
             msg="",
-            resource_policy=KeyPairResourcePolicy.from_row(
-                graph_ctx, result.keypair_resource_policy
-            ),
         )
 
 
@@ -403,17 +395,18 @@ class ModifyKeyPairResourcePolicy(graphene.Mutation):
         name: str,
         props: ModifyKeyPairResourcePolicyInput,
     ) -> ModifyKeyPairResourcePolicy:
+        from ai.backend.manager.services.keypair_resource_policies.actions.modify_keypair_resource_policy import (
+            ModifyKeyPairResourcePolicyAction,
+        )
+
         graph_ctx: GraphQueryContext = info.context
-        result = await graph_ctx.processors.keypair_resource_policy_service.modify_keypair_resource_policy.wait_for_complete(
+        await graph_ctx.processors.keypair_resource_policy_service.modify_keypair_resource_policy.wait_for_complete(
             ModifyKeyPairResourcePolicyAction(name, props)
         )
 
         return ModifyKeyPairResourcePolicy(
             ok=True,
             msg="",
-            resource_policy=KeyPairResourcePolicy.from_row(
-                graph_ctx, result.keypair_resource_policy
-            ),
         )
 
 
@@ -433,16 +426,17 @@ class DeleteKeyPairResourcePolicy(graphene.Mutation):
         info: graphene.ResolveInfo,
         name: str,
     ) -> DeleteKeyPairResourcePolicy:
+        from ai.backend.manager.services.keypair_resource_policies.actions.delete_keypair_resource_policy import (
+            DeleteKeyPairResourcePolicyAction,
+        )
+
         graph_ctx: GraphQueryContext = info.context
-        result = await graph_ctx.processors.keypair_resource_policy_service.delete_keypair_resource_policy.wait_for_complete(
+        await graph_ctx.processors.keypair_resource_policy_service.delete_keypair_resource_policy.wait_for_complete(
             DeleteKeyPairResourcePolicyAction(name)
         )
         return DeleteKeyPairResourcePolicy(
             ok=True,
             msg="",
-            resource_policy=KeyPairResourcePolicy.from_row(
-                graph_ctx, result.keypair_resource_policy
-            ),
         )
 
 
