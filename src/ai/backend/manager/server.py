@@ -77,6 +77,9 @@ from ai.backend.manager.service.container_registry.harbor import (
 from ai.backend.manager.services.agent.service import AgentService
 from ai.backend.manager.services.container_registry.service import ContainerRegistryService
 from ai.backend.manager.services.group.service import GroupService
+from ai.backend.manager.services.keypair_resource_policies.service import (
+    KeypairResourcePolicyService,
+)
 from ai.backend.manager.services.processors import Processors
 from ai.backend.manager.services.resource_preset.service import ResourcePresetService
 from ai.backend.manager.services.user.service import UserService
@@ -462,12 +465,17 @@ async def processors_ctx(root_ctx: RootContext) -> AsyncIterator[None]:
         redis_stat=root_ctx.redis_stat,
     )
 
+    keypair_resource_policy_service = KeypairResourcePolicyService(
+        db=root_ctx.db,
+    )
+
     root_ctx.processors = Processors(
         agent_service=agent_service,
         resource_preset_service=resource_preset_service,
         container_registry_service=container_registry_service,
         user_service=user_service,
         group_service=group_service,
+        keypair_resource_policy_service=keypair_resource_policy_service,
     )
     yield
 
