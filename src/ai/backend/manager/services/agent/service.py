@@ -11,19 +11,23 @@ from ai.backend.logging.utils import BraceStyleAdapter
 from ai.backend.manager.config import SharedConfig
 from ai.backend.manager.models.utils import ExtendedAsyncSAEngine
 from ai.backend.manager.registry import AgentRegistry
-from ai.backend.manager.services.resource.actions.get_watcher_status import (
+from ai.backend.manager.services.agent.actions.get_watcher_status import (
     GetWatcherStatusAction,
     GetWatcherStatusActionResult,
 )
-from ai.backend.manager.services.resource.actions.watcher_agent_restart import (
+from ai.backend.manager.services.agent.actions.recalculate_usage import (
+    RecalculateUsageAction,
+    RecalculateUsageActionResult,
+)
+from ai.backend.manager.services.agent.actions.watcher_agent_restart import (
     WatcherAgentRestartAction,
     WatcherAgentRestartActionResult,
 )
-from ai.backend.manager.services.resource.actions.watcher_agent_start import (
+from ai.backend.manager.services.agent.actions.watcher_agent_start import (
     WatcherAgentStartAction,
     WatcherAgentStartActionResult,
 )
-from ai.backend.manager.services.resource.actions.watcher_agent_stop import (
+from ai.backend.manager.services.agent.actions.watcher_agent_stop import (
     WatcherAgentStopAction,
     WatcherAgentStopActionResult,
 )
@@ -116,3 +120,9 @@ class AgentService:
                 headers = {"X-BackendAI-Watcher-Token": watcher_info["token"]}
                 async with sess.post(watcher_url, headers=headers) as resp:
                     return WatcherAgentStopActionResult(resp)
+
+    async def recalculate_usage(
+        self, action: RecalculateUsageAction
+    ) -> RecalculateUsageActionResult:
+        await self._agent_registry.recalc_resource_usage()
+        return RecalculateUsageActionResult()

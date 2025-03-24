@@ -145,7 +145,7 @@ async def recalculate_usage(request: web.Request) -> web.Response:
     """
     log.info("RECALCULATE_USAGE ()")
     root_ctx: RootContext = request.app["_root.context"]
-    await root_ctx.processors.group.recalculate_usage.wait_for_complete(RecalculateUsageAction())
+    await root_ctx.processors.agent.recalculate_usage.wait_for_complete(RecalculateUsageAction())
 
     return web.json_response({}, status=200)
 
