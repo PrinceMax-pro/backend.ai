@@ -1,10 +1,11 @@
+import uuid
 from datetime import datetime
 from typing import Any
 
 import pytest
 import sqlalchemy as sa
 
-from ai.backend.common.types import ResourceSlot
+from ai.backend.common.types import ResourceSlot, VFolderHostPermissionMap
 from ai.backend.manager.models.domain import DomainRow
 from ai.backend.manager.models.user import UserRole
 from ai.backend.manager.models.utils import ExtendedAsyncSAEngine
@@ -48,7 +49,7 @@ def processors(database_fixture, database_engine) -> DomainProcessors:
 @pytest.fixture
 def admin_user() -> UserInfo:
     return UserInfo(
-        id="f38dea23-50fa-42a0-b5ae-338f5f4693f4",
+        id=uuid.UUID("f38dea23-50fa-42a0-b5ae-338f5f4693f4"),
         role=UserRole.ADMIN,
         domain_name="default",
     )
@@ -87,7 +88,7 @@ async def create_domain(
                 description="Test domain",
                 scaling_groups=None,
                 user_info=UserInfo(
-                    id="f38dea23-50fa-42a0-b5ae-338f5f4693f4",
+                    id=uuid.UUID("f38dea23-50fa-42a0-b5ae-338f5f4693f4"),
                     role=UserRole.ADMIN,
                     domain_name="default",
                 ),
@@ -101,7 +102,7 @@ async def create_domain(
                     # created_at 같이 정확한 값을 테스트하기 어려운 경우 어떻게 해야 할지 (현재 모든 필드가 다 매치되어야 테스트 통과)
                     modified_at=datetime.now(),
                     total_resource_slots=ResourceSlot.from_user_input({}, None),
-                    allowed_vfolder_hosts={},
+                    allowed_vfolder_hosts=VFolderHostPermissionMap({}),
                     allowed_docker_registries=[],
                     dotfiles=b"\x90",
                     integration_id=None,
@@ -117,7 +118,7 @@ async def create_domain(
                 description="Test domain",
                 scaling_groups=None,
                 user_info=UserInfo(
-                    id="f38dea23-50fa-42a0-b5ae-338f5f4693f4",
+                    id=uuid.UUID("f38dea23-50fa-42a0-b5ae-338f5f4693f4"),
                     role=UserRole.ADMIN,
                     domain_name="default",
                 ),
@@ -142,7 +143,7 @@ async def test_create_domain_node(
             ModifyDomainNodeAction(
                 name="test-modify-domain-node",
                 user_info=UserInfo(
-                    id="f38dea23-50fa-42a0-b5ae-338f5f4693f4",
+                    id=uuid.UUID("f38dea23-50fa-42a0-b5ae-338f5f4693f4"),
                     role=UserRole.SUPERADMIN,
                     domain_name="default",
                 ),
@@ -156,7 +157,7 @@ async def test_create_domain_node(
                     created_at=datetime.now(),
                     modified_at=datetime.now(),
                     total_resource_slots=ResourceSlot.from_user_input({}, None),
-                    allowed_vfolder_hosts={},
+                    allowed_vfolder_hosts=VFolderHostPermissionMap({}),
                     allowed_docker_registries=[],
                     dotfiles=b"\x90",
                     integration_id=None,
@@ -170,7 +171,7 @@ async def test_create_domain_node(
             ModifyDomainNodeAction(
                 name="not-exist-domain",
                 user_info=UserInfo(
-                    id="f38dea23-50fa-42a0-b5ae-338f5f4693f4",
+                    id=uuid.UUID("f38dea23-50fa-42a0-b5ae-338f5f4693f4"),
                     role=UserRole.SUPERADMIN,
                     domain_name="default",
                 ),
@@ -183,7 +184,7 @@ async def test_create_domain_node(
             ModifyDomainNodeAction(
                 name="not-exist-domain",
                 user_info=UserInfo(
-                    id="dfa9da54-4b28-432f-be29-c0d680c7a412",
+                    id=uuid.UUID("dfa9da54-4b28-432f-be29-c0d680c7a412"),
                     role=UserRole.USER,
                     domain_name="default",
                 ),
@@ -195,7 +196,7 @@ async def test_create_domain_node(
 )
 async def test_modify_domain_node(
     processors: DomainProcessors,
-    test_scenario: TestScenario[ModifyDomainAction, ModifyDomainActionResult],
+    test_scenario: TestScenario[ModifyDomainNodeAction, ModifyDomainNodeActionResult],
     create_domain,
 ):
     _ = await create_domain("test-modify-domain-node")
@@ -220,7 +221,7 @@ async def test_modify_domain_node(
                     created_at=datetime.now(),
                     modified_at=datetime.now(),
                     total_resource_slots=ResourceSlot.from_user_input({}, None),
-                    allowed_vfolder_hosts={},
+                    allowed_vfolder_hosts=VFolderHostPermissionMap({}),
                     allowed_docker_registries=[],
                     dotfiles=b"\x90",
                     integration_id=None,
@@ -269,7 +270,7 @@ async def test_create_domain(
                     created_at=datetime.now(),
                     modified_at=datetime.now(),
                     total_resource_slots=ResourceSlot.from_user_input({}, None),
-                    allowed_vfolder_hosts={},
+                    allowed_vfolder_hosts=VFolderHostPermissionMap({}),
                     allowed_docker_registries=[],
                     dotfiles=b"\x90",
                     integration_id=None,
