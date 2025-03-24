@@ -32,17 +32,17 @@ from ai.backend.manager.services.agent.actions.watcher_agent_stop import Watcher
 from ai.backend.manager.services.container_registry.actions.get_container_registries import (
     GetContainerRegistriesAction,
 )
-from ai.backend.manager.services.resource.actions.admin_month_stats import AdminMonthStatsAction
-from ai.backend.manager.services.resource.actions.recalculate_usage import RecalculateUsageAction
-from ai.backend.manager.services.resource.actions.usage_per_month import UsagePerMonthAction
-from ai.backend.manager.services.resource.actions.usage_per_period import UsagePerPeriodAction
-from ai.backend.manager.services.resource.actions.user_month_stats import UserMonthStatsAction
+from ai.backend.manager.services.group.actions.recalculate_usage import RecalculateUsageAction
+from ai.backend.manager.services.group.actions.usage_per_month import UsagePerMonthAction
+from ai.backend.manager.services.group.actions.usage_per_period import UsagePerPeriodAction
 from ai.backend.manager.services.resource_preset.actions.check_presets import (
     CheckResourcePresetsAction,
 )
 from ai.backend.manager.services.resource_preset.actions.list_presets import (
     ListResourcePresetsAction,
 )
+from ai.backend.manager.services.user.actions.admin_month_stats import AdminMonthStatsAction
+from ai.backend.manager.services.user.actions.user_month_stats import UserMonthStatsAction
 
 from .auth import auth_required, superadmin_required
 from .exceptions import InvalidAPIParameters
@@ -145,7 +145,7 @@ async def recalculate_usage(request: web.Request) -> web.Response:
     """
     log.info("RECALCULATE_USAGE ()")
     root_ctx: RootContext = request.app["_root.context"]
-    await root_ctx.processors.resource.recalculate_usage.wait_for_complete(RecalculateUsageAction())
+    await root_ctx.processors.group.recalculate_usage.wait_for_complete(RecalculateUsageAction())
 
     return web.json_response({}, status=200)
 
@@ -170,7 +170,7 @@ async def usage_per_month(request: web.Request, params: Any) -> web.Response:
     log.info("USAGE_PER_MONTH (g:[{}], month:{})", ",".join(params["group_ids"]), params["month"])
     root_ctx: RootContext = request.app["_root.context"]
 
-    result = await root_ctx.processors.resource.usage_per_month.wait_for_complete(
+    result = await root_ctx.processors.group.usage_per_month.wait_for_complete(
         UsagePerMonthAction(
             group_ids=params["group_ids"],
             month=params["month"],
@@ -201,7 +201,7 @@ async def usage_per_period(request: web.Request, params: Any) -> web.Response:
     """
     root_ctx: RootContext = request.app["_root.context"]
 
-    result = await root_ctx.processors.resource.usage_per_period.wait_for_complete(
+    result = await root_ctx.processors.group.usage_per_period.wait_for_complete(
         UsagePerPeriodAction(
             project_id=params["project_id"],
             start_date=params["start_date"],
@@ -224,7 +224,7 @@ async def user_month_stats(request: web.Request) -> web.Response:
     log.info("USER_LAST_MONTH_STATS (ak:{}, u:{})", access_key, user_uuid)
     root_ctx: RootContext = request.app["_root.context"]
 
-    result = await root_ctx.processors.resource.user_month_stats.wait_for_complete(
+    result = await root_ctx.processors.user.user_month_stats.wait_for_complete(
         UserMonthStatsAction(
             user_id=user_uuid,
         )
@@ -243,7 +243,7 @@ async def admin_month_stats(request: web.Request) -> web.Response:
     log.info("ADMIN_LAST_MONTH_STATS ()")
     root_ctx: RootContext = request.app["_root.context"]
 
-    result = await root_ctx.processors.resource.admin_month_stats.wait_for_complete(
+    result = await root_ctx.processors.user.admin_month_stats.wait_for_complete(
         AdminMonthStatsAction()
     )
 

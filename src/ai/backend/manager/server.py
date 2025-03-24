@@ -76,9 +76,10 @@ from ai.backend.manager.service.container_registry.harbor import (
 )
 from ai.backend.manager.services.agent.service import AgentService
 from ai.backend.manager.services.container_registry.service import ContainerRegistryService
+from ai.backend.manager.services.group.service import GroupService
 from ai.backend.manager.services.processors import Processors
-from ai.backend.manager.services.resource.service import ResourceService
 from ai.backend.manager.services.resource_preset.service import ResourcePresetService
+from ai.backend.manager.services.user.service import UserService
 
 from . import __version__
 from .agent_cache import AgentRPCCache
@@ -440,7 +441,7 @@ async def processors_ctx(root_ctx: RootContext) -> AsyncIterator[None]:
         shared_config=root_ctx.shared_config,
     )
 
-    resource_service = ResourceService(
+    group_service = GroupService(
         db=root_ctx.db,
         agent_registry=root_ctx.registry,
         redis_stat=root_ctx.redis_stat,
@@ -457,11 +458,24 @@ async def processors_ctx(root_ctx: RootContext) -> AsyncIterator[None]:
         db=root_ctx.db,
     )
 
+    user_service = UserService(
+        db=root_ctx.db,
+        redis_stat=root_ctx.redis_stat,
+    )
+
+    group_service = GroupService(
+        db=root_ctx.db,
+        agent_registry=root_ctx.registry,
+        shared_config=root_ctx.shared_config,
+        redis_stat=root_ctx.redis_stat,
+    )
+
     root_ctx.processors = Processors(
         agent_service=agent_service,
         resource_preset_service=resource_preset_service,
-        resource_service=resource_service,
         container_registry_service=container_registry_service,
+        user_service=user_service,
+        group_service=group_service,
     )
     yield
 
