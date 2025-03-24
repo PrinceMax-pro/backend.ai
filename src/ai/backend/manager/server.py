@@ -441,13 +441,6 @@ async def processors_ctx(root_ctx: RootContext) -> AsyncIterator[None]:
         shared_config=root_ctx.shared_config,
     )
 
-    group_service = GroupService(
-        db=root_ctx.db,
-        agent_registry=root_ctx.registry,
-        redis_stat=root_ctx.redis_stat,
-        shared_config=root_ctx.shared_config,
-    )
-
     resource_preset_service = ResourcePresetService(
         db=root_ctx.db,
         agent_registry=root_ctx.registry,
@@ -465,7 +458,6 @@ async def processors_ctx(root_ctx: RootContext) -> AsyncIterator[None]:
 
     group_service = GroupService(
         db=root_ctx.db,
-        agent_registry=root_ctx.registry,
         shared_config=root_ctx.shared_config,
         redis_stat=root_ctx.redis_stat,
     )
