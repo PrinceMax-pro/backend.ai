@@ -10,6 +10,10 @@ from ai.backend.manager.services.keypair_resource_policy.processors import (
 from ai.backend.manager.services.keypair_resource_policy.service import (
     KeypairResourcePolicyService,
 )
+from ai.backend.manager.services.project_resource_policy.processors import (
+    ProjectResourcePolicyProcessors,
+)
+from ai.backend.manager.services.project_resource_policy.service import ProjectResourcePolicyService
 from ai.backend.manager.services.resource_preset.processors import ResourcePresetProcessors
 from ai.backend.manager.services.resource_preset.service import ResourcePresetService
 from ai.backend.manager.services.user.processors import UserProcessors
@@ -26,6 +30,7 @@ class Processors:
     container_registry: ContainerRegistryProcessors
     keypair_resource_policy: KeypairResourcePolicyProcessors
     user_resource_policy: UserResourcePolicyProcessors
+    project_resource_policy: ProjectResourcePolicyProcessors
 
     def __init__(
         self,
@@ -36,6 +41,7 @@ class Processors:
         container_registry_service: ContainerRegistryService,
         keypair_resource_policy_service: KeypairResourcePolicyService,
         user_resource_policy_service: UserResourcePolicyService,
+        project_resource_policy_service: ProjectResourcePolicyService,
     ) -> None:
         self.agent = AgentProcessors(agent_service)
         self.user = UserProcessors(user_service)
@@ -46,3 +52,6 @@ class Processors:
             keypair_resource_policy_service
         )
         self.user_resource_policy = UserResourcePolicyProcessors(user_resource_policy_service)
+        self.project_resource_policy = ProjectResourcePolicyProcessors(
+            project_resource_policy_service
+        )
