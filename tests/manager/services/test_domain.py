@@ -1,12 +1,13 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable, Coroutine
 
 import pytest
 import sqlalchemy as sa
 
 from ai.backend.common.types import ResourceSlot, VFolderHostPermissionMap
 from ai.backend.manager.models.domain import DomainRow
+from ai.backend.manager.models.group import GroupRow
 from ai.backend.manager.models.user import UserRole
 from ai.backend.manager.models.utils import ExtendedAsyncSAEngine
 from ai.backend.manager.services.domain.actions.create_domain import (
@@ -58,7 +59,7 @@ def admin_user() -> UserInfo:
 @pytest.fixture
 async def create_domain(
     database_engine: ExtendedAsyncSAEngine,
-):
+) -> Callable[[str], Coroutine[Any, Any, str]]:
     async def _create_domain(name: str = "test-domain") -> str:
         async with database_engine.begin() as conn:
             domain_name = name
@@ -99,7 +100,6 @@ async def create_domain(
                     description="Test domain",
                     is_active=True,
                     created_at=datetime.now(),
-                    # created_at 같이 정확한 값을 테스트하기 어려운 경우 어떻게 해야 할지 (현재 모든 필드가 다 매치되어야 테스트 통과)
                     modified_at=datetime.now(),
                     total_resource_slots=ResourceSlot.from_user_input({}, None),
                     allowed_vfolder_hosts=VFolderHostPermissionMap({}),
@@ -130,7 +130,7 @@ async def create_domain(
 async def test_create_domain_node(
     processors: DomainProcessors,
     test_scenario: TestScenario[CreateDomainNodeAction, CreateDomainNodeActionResult],
-):
+) -> None:
     await test_scenario.test(processors.create_domain_node.wait_for_complete)
 
 
@@ -198,7 +198,7 @@ async def test_modify_domain_node(
     processors: DomainProcessors,
     test_scenario: TestScenario[ModifyDomainNodeAction, ModifyDomainNodeActionResult],
     create_domain,
-):
+) -> None:
     _ = await create_domain("test-modify-domain-node")
     await test_scenario.test(processors.modify_domain_node.wait_for_complete)
 
@@ -230,7 +230,6 @@ async def test_modify_domain_node(
                 description="domain creation succeed",
             ),
         ),
-        # 현재 실패에 대해 Exception raise가 아니라 None을 반환하고 있는 상황
         TestScenario.success(
             "Create a domain with duplicated name, return none",
             CreateDomainAction(
@@ -248,8 +247,27 @@ async def test_modify_domain_node(
 async def test_create_domain(
     processors: DomainProcessors,
     test_scenario: TestScenario[CreateDomainAction, CreateDomainActionResult],
-):
+) -> None:
     await test_scenario.test(processors.create_domain.wait_for_complete)
+
+
+@pytest.mark.asyncio
+async def test_create_model_store_after_domain_created(
+    processors: DomainProcessors, database_engine
+) -> None:
+    domain_name = "test-create-domain-post-func"
+    action = CreateDomainAction(name=domain_name)
+
+    await processors.create_domain.wait_for_complete(action)
+
+    async with database_engine.begin_session() as session:
+        domain = await session.scalar(
+            sa.select(GroupRow).where(
+                (GroupRow.name == "model-store") & (GroupRow.domain_name == domain_name)
+            )
+        )
+
+        assert domain is not None
 
 
 @pytest.mark.asyncio
@@ -297,7 +315,7 @@ async def test_modify_domain(
     processors: DomainProcessors,
     test_scenario: TestScenario[ModifyDomainAction, ModifyDomainActionResult],
     create_domain,
-):
+) -> None:
     _ = await create_domain("test-modify-domain")
     await test_scenario.test(processors.modify_domain.wait_for_complete)
 
@@ -332,10 +350,43 @@ async def test_delete_domain(
     processors: DomainProcessors,
     test_scenario: TestScenario[DeleteDomainAction, DeleteDomainActionResult],
     create_domain,
-):
+) -> None:
     _ = await create_domain("test-delete-domain")
     await test_scenario.test(processors.delete_domain.wait_for_complete)
-    # TODO: soft delete 되었는지 직접 DB에 조회해야 하는지 확인 필요
+
+
+@pytest.mark.asyncio
+async def test_delete_domain_in_db(
+    processors: DomainProcessors, database_engine, create_domain
+) -> None:
+    domain_name = "test-delete-domain-in-db"
+
+    await create_domain(domain_name)
+    async with database_engine.begin_session() as session:
+        domain = await session.scalar(
+            sa.select(DomainRow).where(
+                (DomainRow.name == domain_name) & (DomainRow.is_active == True)  # noqa
+            )
+        )
+
+    await processors.delete_domain.wait_for_complete(DeleteDomainAction(name=domain_name))
+
+    async with database_engine.begin_session() as session:
+        domain = await session.scalar(
+            sa.select(DomainRow).where(
+                (DomainRow.name == domain_name) & (DomainRow.is_active == True)  # noqa
+            )
+        )
+
+        assert domain is None
+
+        domain = await session.scalar(
+            sa.select(DomainRow).where(
+                (DomainRow.name == domain_name) & (DomainRow.is_active == False)  # noqa
+            )
+        )
+
+        assert domain is not None
 
 
 @pytest.mark.asyncio
@@ -368,7 +419,34 @@ async def test_purge_domain(
     processors: DomainProcessors,
     test_scenario: TestScenario[PurgeDomainAction, PurgeDomainActionResult],
     create_domain,
-):
+) -> None:
     _ = await create_domain("test-purge-domain")
     await test_scenario.test(processors.purge_domain.wait_for_complete)
-    # TODO: hard delete 되었는지 직접 DB에 조회해야 하는지 확인 필요
+
+
+@pytest.mark.asyncio
+async def test_purge_domain_in_db(
+    processors: DomainProcessors, database_engine, create_domain
+) -> None:
+    domain_name = "test-purge-domain-in-db"
+    # create domain
+    await create_domain(domain_name)
+
+    # delete domain(soft delete) and delete model-store group
+    await processors.delete_domain.wait_for_complete(DeleteDomainAction(name=domain_name))
+    async with database_engine.begin_session() as session:
+        await session.execute(
+            sa.update(GroupRow)
+            .where((GroupRow.name == "model-store") & (GroupRow.domain_name == domain_name))
+            .values({"is_active": False})
+        )
+
+        domain = await session.scalar(sa.select(DomainRow).where(DomainRow.name == domain_name))
+        assert domain is not None
+
+    # purge domain
+    await processors.purge_domain.wait_for_complete(PurgeDomainAction(name=domain_name))
+    async with database_engine.begin_session() as session:
+        domain = await session.scalar(sa.select(DomainRow).where(DomainRow.name == domain_name))
+
+        assert domain is None
