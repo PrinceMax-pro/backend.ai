@@ -83,6 +83,7 @@ from ai.backend.manager.services.keypair_resource_policy.service import (
 from ai.backend.manager.services.processors import Processors
 from ai.backend.manager.services.resource_preset.service import ResourcePresetService
 from ai.backend.manager.services.user.service import UserService
+from ai.backend.manager.services.user_resource_policy.service import UserResourcePolicyService
 
 from . import __version__
 from .agent_cache import AgentRPCCache
@@ -469,6 +470,10 @@ async def processors_ctx(root_ctx: RootContext) -> AsyncIterator[None]:
         db=root_ctx.db,
     )
 
+    user_resource_policy_service = UserResourcePolicyService(
+        db=root_ctx.db,
+    )
+
     root_ctx.processors = Processors(
         agent_service=agent_service,
         resource_preset_service=resource_preset_service,
@@ -476,6 +481,7 @@ async def processors_ctx(root_ctx: RootContext) -> AsyncIterator[None]:
         user_service=user_service,
         group_service=group_service,
         keypair_resource_policy_service=keypair_resource_policy_service,
+        user_resource_policy_service=user_resource_policy_service,
     )
     yield
 
