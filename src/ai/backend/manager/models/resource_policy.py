@@ -362,7 +362,7 @@ class CreateKeyPairResourcePolicy(graphene.Mutation):
         name: str,
         props: CreateKeyPairResourcePolicyInput,
     ) -> CreateKeyPairResourcePolicy:
-        from ai.backend.manager.services.keypair_resource_policies.actions.create_keypair_resource_policy import (
+        from ai.backend.manager.services.keypair_resource_policy.actions.create_keypair_resource_policy import (
             CreateKeyPairResourcePolicyAction,
         )
 
@@ -395,7 +395,7 @@ class ModifyKeyPairResourcePolicy(graphene.Mutation):
         name: str,
         props: ModifyKeyPairResourcePolicyInput,
     ) -> ModifyKeyPairResourcePolicy:
-        from ai.backend.manager.services.keypair_resource_policies.actions.modify_keypair_resource_policy import (
+        from ai.backend.manager.services.keypair_resource_policy.actions.modify_keypair_resource_policy import (
             ModifyKeyPairResourcePolicyAction,
         )
 
@@ -426,7 +426,7 @@ class DeleteKeyPairResourcePolicy(graphene.Mutation):
         info: graphene.ResolveInfo,
         name: str,
     ) -> DeleteKeyPairResourcePolicy:
-        from ai.backend.manager.services.keypair_resource_policies.actions.delete_keypair_resource_policy import (
+        from ai.backend.manager.services.keypair_resource_policy.actions.delete_keypair_resource_policy import (
             DeleteKeyPairResourcePolicyAction,
         )
 

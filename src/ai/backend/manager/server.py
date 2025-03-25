@@ -77,7 +77,7 @@ from ai.backend.manager.service.container_registry.harbor import (
 from ai.backend.manager.services.agent.service import AgentService
 from ai.backend.manager.services.container_registry.service import ContainerRegistryService
 from ai.backend.manager.services.group.service import GroupService
-from ai.backend.manager.services.keypair_resource_policies.service import (
+from ai.backend.manager.services.keypair_resource_policy.service import (
     KeypairResourcePolicyService,
 )
 from ai.backend.manager.services.processors import Processors

@@ -4,10 +4,10 @@ from ai.backend.manager.services.container_registry.processors import ContainerR
 from ai.backend.manager.services.container_registry.service import ContainerRegistryService
 from ai.backend.manager.services.group.processors import GroupProcessors
 from ai.backend.manager.services.group.service import GroupService
-from ai.backend.manager.services.keypair_resource_policies.processors import (
+from ai.backend.manager.services.keypair_resource_policy.processors import (
     KeypairResourcePolicyProcessors,
 )
-from ai.backend.manager.services.keypair_resource_policies.service import (
+from ai.backend.manager.services.keypair_resource_policy.service import (
     KeypairResourcePolicyService,
 )
 from ai.backend.manager.services.resource_preset.processors import ResourcePresetProcessors
