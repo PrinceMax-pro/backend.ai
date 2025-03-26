@@ -277,7 +277,7 @@ async def test_create_model_store_after_domain_created(
         TestScenario.success(
             "Modify domain",
             ModifyDomainAction(
-                name="test-modify-domain",
+                domain_name="test-modify-domain",
                 description="Domain Description Modified",
             ),
             ModifyDomainActionResult(
@@ -300,7 +300,7 @@ async def test_create_model_store_after_domain_created(
         TestScenario.success(
             "Modify a domain not exists",
             ModifyDomainAction(
-                name="not-exist-domain",
+                domain_name="not-exist-domain",
                 description="Domain Description Modified",
             ),
             ModifyDomainActionResult(
