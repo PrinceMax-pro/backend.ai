@@ -342,28 +342,6 @@ async def shared_config(app, etcd_fixture) -> AsyncIterator[SharedConfig]:
     yield shared_config
 
 
-@pytest.fixture
-async def storage_manager(app, shared_config, vfolder_mount, vfolder_fsprefix, vfolder_host):
-    from ai.backend.manager.models.storage import StorageSessionManager
-
-    config = (
-        {
-            "_mount": str(vfolder_mount),
-            "_fsprefix": str(vfolder_fsprefix),
-            "default_host": str(vfolder_host),
-            "proxies": {
-                "local": {
-                    "client_api": "http://127.0.0.1:6021",
-                    "manager_api": "https://127.0.0.1:6022",
-                    "secret": "some-secret-shared-with-storage-proxy",
-                    "ssl_verify": "false",
-                }
-            },
-        },
-    )
-    yield StorageSessionManager(config)
-
-
 @pytest.fixture(scope="session")
 def database(request, local_config, test_db) -> None:
     """
