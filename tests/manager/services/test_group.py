@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Awaitable, Callable, Optional
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 import sqlalchemy as sa
@@ -42,21 +42,6 @@ def mock_storage_manager():
 @pytest.fixture
 def processors(database_fixture, database_engine, mock_storage_manager) -> GroupProcessors:
     group_service = GroupService(db=database_engine, storage_manager=mock_storage_manager)
-    return GroupProcessors(group_service)
-
-
-@pytest.fixture
-def processors_with_mocked_group_cleanup(
-    database_fixture, database_engine, mock_storage_manager, monkeypatch
-) -> GroupProcessors:
-    group_service = GroupService(db=database_engine, storage_manager=mock_storage_manager)
-    monkeypatch.setattr(
-        group_service, "_group_vfolder_mounted_to_active_kernels", AsyncMock(return_value=False)
-    )
-    monkeypatch.setattr(group_service, "_group_has_active_kernels", AsyncMock(return_value=False))
-    monkeypatch.setattr(group_service, "_delete_vfolders", AsyncMock(return_value=0))
-    monkeypatch.setattr(group_service, "_delete_kernels", AsyncMock(return_value=0))
-    monkeypatch.setattr(group_service, "_delete_sessions", AsyncMock(return_value=None))
     return GroupProcessors(group_service)
 
 
@@ -307,21 +292,17 @@ async def test_delete_group_in_db(
 #     ]
 # )
 async def test_purge_group(
-    processors_with_mocked_group_cleanup: GroupProcessors,
+    processors: GroupProcessors,
     # test_scenario: TestScenario[ModifyGroupAction, ModifyGroupActionResult],
     create_group: Callable[..., Awaitable[uuid.UUID]],
 ) -> None:
     # await test_scenario.test(processors.purge_group.wait_for_complete)
 
     group_id = await create_group(domain_name="default", name="test_purge_group")
-    await processors_with_mocked_group_cleanup.delete_group.wait_for_complete(
-        DeleteGroupAction(group_id)
-    )
+    await processors.delete_group.wait_for_complete(DeleteGroupAction(group_id))
 
-    result: PurgeGroupActionResult = (
-        await processors_with_mocked_group_cleanup.purge_group.wait_for_complete(
-            PurgeGroupAction(group_id)
-        )
+    result: PurgeGroupActionResult = await processors.purge_group.wait_for_complete(
+        PurgeGroupAction(group_id)
     )
     assert result.data is None
     assert result.success == True  # noqa: E712
@@ -329,17 +310,13 @@ async def test_purge_group(
 
 @pytest.mark.asyncio
 async def test_purge_group_in_db(
-    processors_with_mocked_group_cleanup: GroupProcessors,
+    processors: GroupProcessors,
     create_group: Callable[..., Awaitable[uuid.UUID]],
     database_engine: ExtendedAsyncSAEngine,
 ) -> None:
     group_id = await create_group(domain_name="default", name="test_purge_group_in_db")
-    await processors_with_mocked_group_cleanup.delete_group.wait_for_complete(
-        DeleteGroupAction(group_id)
-    )
-    await processors_with_mocked_group_cleanup.purge_group.wait_for_complete(
-        PurgeGroupAction(group_id)
-    )
+    await processors.delete_group.wait_for_complete(DeleteGroupAction(group_id))
+    await processors.purge_group.wait_for_complete(PurgeGroupAction(group_id))
 
     async with database_engine.begin_session() as session:
         group = await session.scalar(sa.select(GroupRow).where(GroupRow.id == group_id))
